@@ -1,0 +1,9 @@
+{
+  // Recommends the Datadog IDE extension. On open, VS Code prompts to install it.
+  // The Datadog plugin reads code-security.datadog.yaml and surfaces SAST findings
+  // inline as you type (same java-security ruleset as CI), and shows SCA library
+  // vulnerabilities + runtime IAST findings pulled back from Datadog.
+  "recommendations": [
+    "Datadog.datadog-vscode"
+  ]
+}

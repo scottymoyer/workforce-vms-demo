@@ -1,0 +1,7 @@
+CONTRACT #1001 — Apex Staffing Group
+Worker: Ada Lovelace (Senior Data Engineer)
+Bill Rate: $145.00/hr
+Term: 2026-06-01 through 2026-12-31
+Status: ACTIVE
+
+This is a demo document served by the workforce-vms attachment endpoint.

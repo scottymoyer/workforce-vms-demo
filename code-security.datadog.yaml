@@ -1,0 +1,17 @@
+# Datadog Static Analysis (SAST) configuration — CURRENT format.
+#
+# As of 2026 the canonical config file is `code-security.datadog.yaml`, with rulesets
+# nested under `sast:`. If both this file and the legacy `static-analysis.datadog.yml`
+# exist, THIS file wins. It drives both the CI static-analysis job and the Datadog IDE
+# plugin, so the same Java findings light up inline as you type and in the PR.
+#
+# Docs: https://docs.datadoghq.com/security/code_security/static_analysis/configuration/
+
+schema-version: v1
+sast:
+  use-default-rulesets: false
+  use-rulesets:
+    - java-security         # SQLi, command injection, path traversal, SSRF, weak crypto, XSS…
+    - java-best-practices
+    - java-code-style
+    - java-inclusive

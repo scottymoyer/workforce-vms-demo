@@ -1,0 +1,137 @@
+name: CI — Build + Datadog Code Security
+
+# The Datadog Static Analyzer GitHub Action supports the `push` trigger; we also run
+# on pull_request so the build/test/SCA jobs give PR feedback.
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+  pull-requests: write   # allow in-PR annotations via Source Code Integration
+
+env:
+  DD_SITE: ${{ vars.DD_SITE || 'datadoghq.com' }}
+
+jobs:
+  # ── 1. Datadog Static Analysis (SAST) ───────────────────────────────────────
+  static-analysis:
+    name: SAST (Datadog Static Analysis)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0   # full history for diff-aware scanning + SCI
+      # Reads code-security.datadog.yaml (java-security ruleset). Findings link to
+      # file/line and post as in-PR comments via Source Code Integration / PR Gates.
+      - name: Run Datadog Static Analyzer
+        uses: DataDog/datadog-static-analyzer-github-action@v3
+        with:
+          dd_api_key: ${{ secrets.DD_API_KEY }}
+          dd_app_key: ${{ secrets.DD_APP_KEY }}
+          dd_site: ${{ env.DD_SITE }}
+          cpu_count: 2
+          enable_performance_statistics: false
+          diff_aware: true
+
+  # ── 2. Datadog Software Composition Analysis (SCA) via SBOM ─────────────────
+  software-composition-analysis:
+    name: SCA (SBOM upload)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+          cache: maven
+
+      # Generate a CycloneDX SBOM from the Maven dependency graph. This includes the
+      # pinned vulnerable libs (log4j 2.14.1, commons-text 1.9, snakeyaml 1.30, …).
+      - name: Generate CycloneDX SBOM
+        run: mvn -q -B org.cyclonedx:cyclonedx-maven-plugin:2.8.0:makeAggregateBom
+
+      - name: Install datadog-ci
+        run: npm install -g @datadog/datadog-ci
+
+      # Upload the git index (powers file/line + PR linking for findings).
+      - name: Upload git metadata (Source Code Integration)
+        env:
+          DD_API_KEY: ${{ secrets.DD_API_KEY }}
+          DD_APP_KEY: ${{ secrets.DD_APP_KEY }}
+          DD_SITE: ${{ env.DD_SITE }}
+        run: datadog-ci git-metadata upload
+
+      # Upload the SBOM to Datadog SCA.
+      - name: Upload SBOM to Datadog SCA
+        env:
+          DD_API_KEY: ${{ secrets.DD_API_KEY }}
+          DD_APP_KEY: ${{ secrets.DD_APP_KEY }}
+          DD_SITE: ${{ env.DD_SITE }}
+        run: datadog-ci sbom upload target/bom.json
+
+  # ── 3. Build + unit tests (catches the upgrade blast-radius break) ──────────
+  build-and-test:
+    name: Build + Test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+          cache: maven
+      # If someone bumps snakeyaml 1.30 → 2.0 to "fix" CVE-2022-1471, LegacyConfigParser
+      # fails to COMPILE (Constructor(Class) removed) and this job fails — the blast
+      # radius is caught pre-merge. See MITIGATION.md.
+      - name: Maven build + test
+        run: mvn -q -B clean verify
+
+  # ── 4. Build image + container image scanning ───────────────────────────────
+  build-image:
+    name: Build + scan container image
+    runs-on: ubuntu-latest
+    needs: [build-and-test]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build image with git metadata
+        run: |
+          docker build \
+            --build-arg DD_GIT_REPOSITORY_URL="github.com/${{ github.repository }}" \
+            --build-arg DD_GIT_COMMIT_SHA="${{ github.sha }}" \
+            -t workforce-vms:${{ github.sha }} .
+      # Container image scanning. Datadog scans images natively via CSM / registry
+      # integration; in-pipeline you can generate an image SBOM and upload it too:
+      - name: Image SBOM → Datadog (container scanning)
+        env:
+          DD_API_KEY: ${{ secrets.DD_API_KEY }}
+          DD_APP_KEY: ${{ secrets.DD_APP_KEY }}
+          DD_SITE: ${{ env.DD_SITE }}
+        run: |
+          # Datadog SBOM generator (Trivy-backed) → CycloneDX for the built image.
+          curl -sSfL https://raw.githubusercontent.com/DataDog/datadog-sbom-generator/main/install.sh | sh -s -- -b /usr/local/bin || true
+          echo "NOTE: In a cloud variant, this image would be pushed to ECR and scanned"
+          echo "      by Datadog CSM Vulnerability Management on the registry."
+
+  # ── 5. QUALITY GATE — gates CI → CD ─────────────────────────────────────────
+  quality-gate:
+    name: Datadog Quality Gate
+    runs-on: ubuntu-latest
+    needs: [static-analysis, software-composition-analysis, build-and-test]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install datadog-ci
+        run: npm install -g @datadog/datadog-ci
+      # Evaluates the Quality Gate rules configured in Datadog (e.g. "block on new
+      # Critical/High Code Security findings"). A failing gate stops the pipeline
+      # before the CD workflow runs. Configure rules in Datadog → Quality Gates.
+      - name: Evaluate Datadog Quality Gate
+        env:
+          DD_API_KEY: ${{ secrets.DD_API_KEY }}
+          DD_APP_KEY: ${{ secrets.DD_APP_KEY }}
+          DD_SITE: ${{ env.DD_SITE }}
+        run: datadog-ci gate evaluate --scope "team:workforce-platform"

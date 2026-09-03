@@ -1,0 +1,43 @@
+name: CD — Deploy (gated by CI Quality Gate)
+
+# CD runs ONLY after the CI workflow (which includes the Datadog Quality Gate)
+# completes successfully. If the quality gate fails, CI fails, and this workflow's
+# `workflow_run` condition (conclusion == success) is not met — so no deploy happens.
+on:
+  workflow_run:
+    workflows: ["CI — Build + Datadog Code Security"]
+    types: [completed]
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    name: Deploy workforce-vms
+    runs-on: ubuntu-latest
+    # ── Gate → Deploy dependency ──────────────────────────────────────────────
+    # Only proceed when the gated CI run concluded successfully.
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Deploy (local docker-compose placeholder)
+        run: |
+          echo "Quality gate passed — deploying workforce-vms."
+          # This demo runs locally, so the deploy is a documented placeholder:
+          #   docker compose up -d
+          #
+          # ── Cloud variant (where a real deploy would slot in) ────────────────
+          # 1. Configure AWS creds (aws-actions/configure-aws-credentials).
+          # 2. docker build + tag for ECR, then `aws ecr get-login-password | docker login`.
+          # 3. docker push <acct>.dkr.ecr.<region>.amazonaws.com/workforce-vms:${{ github.sha }}
+          # 4. Register a new ECS/Fargate task definition + `aws ecs update-service`.
+          #    (Datadog CSM scans the pushed image on the ECR registry.)
+          echo "Deploy step complete."
+
+      - name: Notify Datadog of deployment (optional)
+        run: |
+          # Mark the deployment in Datadog for change tracking / deployment overlays:
+          #   datadog-ci deployment mark --env magnit-demo --revision ${{ github.sha }}
+          echo "Would mark deployment for env=magnit-demo revision=${{ github.sha }}"

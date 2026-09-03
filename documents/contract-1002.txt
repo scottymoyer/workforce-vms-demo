@@ -1,0 +1,7 @@
+CONTRACT #1002 — BlueRiver Talent
+Worker: Grace Hopper (Engineering Manager)
+Bill Rate: $150.00/hr
+Term: 2026-05-15 through 2026-11-15
+Status: ACTIVE
+
+This is a demo document served by the workforce-vms attachment endpoint.

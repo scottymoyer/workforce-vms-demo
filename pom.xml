@@ -1,0 +1,187 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <!--
+      workforce-vms — Datadog Code Security demo (contingent-workforce / VMS)
+      =========================================================================
+      This POM DELIBERATELY pins known-vulnerable dependency versions so that
+      Datadog Software Composition Analysis (SCA), and the App/IAST runtime, have
+      real CVEs to surface. Every pinned version below maps to a real, published
+      CVE and is REACHABLE from an HTTP endpoint (see README vulnerability map).
+
+      DO NOT USE AS A TEMPLATE FOR PRODUCTION. This is a sales demo.
+    -->
+
+    <parent>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-starter-parent</artifactId>
+        <version>2.6.4</version>
+        <relativePath/>
+    </parent>
+
+    <groupId>com.workforce</groupId>
+    <artifactId>workforce-vms</artifactId>
+    <version>1.0.0</version>
+    <name>workforce-vms</name>
+    <description>Contingent-workforce VMS demo for Datadog Code Security</description>
+
+    <properties>
+        <java.version>17</java.version>
+        <maven.compiler.release>17</maven.compiler.release>
+        <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+
+        <!-- ================================================================ -->
+        <!--  DEMO-VULN: pinned vulnerable version overrides (real CVEs)       -->
+        <!-- ================================================================ -->
+
+        <!-- DEMO-VULN: Spring4Shell (CVE-2022-22965) — spring-webmvc/spring-beans 5.3.17 -->
+        <spring-framework.version>5.3.17</spring-framework.version>
+
+        <!-- DEMO-VULN: Embedded Tomcat CVEs (e.g. CVE-2022-23181 TOCTOU, CVE-2021-42340 DoS) -->
+        <tomcat.version>9.0.58</tomcat.version>
+
+        <!-- DEMO-VULN: Log4Shell (CVE-2021-44228) + CVE-2021-45046 — log4j-core 2.14.1 -->
+        <log4j2.version>2.14.1</log4j2.version>
+
+        <!-- DEMO-VULN: SnakeYAML deserialization (CVE-2022-1471) — 1.30 -->
+        <snakeyaml.version>1.30</snakeyaml.version>
+
+        <!-- NOTE: Spring Boot 2.6.4 already manages jackson-databind 2.13.1,
+             which carries CVE-2020-36518 (deep-nesting DoS). Left as-is for
+             realistic transitive-CVE volume. -->
+    </properties>
+
+    <dependencies>
+        <!-- Web / MVC — pulls the pinned vulnerable spring-webmvc + embedded Tomcat -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-web</artifactId>
+            <exclusions>
+                <!-- Swap default Logback for Log4j2 so we can pin the vulnerable log4j-core -->
+                <exclusion>
+                    <groupId>org.springframework.boot</groupId>
+                    <artifactId>spring-boot-starter-logging</artifactId>
+                </exclusion>
+            </exclusions>
+        </dependency>
+
+        <!-- DEMO-VULN: Log4Shell — starter honors the pinned log4j2.version (2.14.1) above -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-log4j2</artifactId>
+        </dependency>
+
+        <!-- JPA + JDBC (JdbcTemplate powers the SQL-injection centerpiece) -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-data-jpa</artifactId>
+        </dependency>
+
+        <!-- Actuator — exposes /actuator/health (used by the compose healthcheck) -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-actuator</artifactId>
+        </dependency>
+
+        <!-- PostgreSQL driver -->
+        <dependency>
+            <groupId>org.postgresql</groupId>
+            <artifactId>postgresql</artifactId>
+            <scope>runtime</scope>
+        </dependency>
+
+        <!-- DEMO-VULN: Text4Shell (CVE-2022-42889) — commons-text 1.9 -->
+        <dependency>
+            <groupId>org.apache.commons</groupId>
+            <artifactId>commons-text</artifactId>
+            <version>1.9</version>
+        </dependency>
+
+        <!-- DEMO-VULN: SnakeYAML (CVE-2022-1471) — pinned 1.30 (also managed via property) -->
+        <dependency>
+            <groupId>org.yaml</groupId>
+            <artifactId>snakeyaml</artifactId>
+            <version>1.30</version>
+        </dependency>
+
+        <!-- DEMO-VULN: transitive-CVE volume #1 — Guava 24.1.1-jre
+             (CVE-2018-10237 unbounded allocation, CVE-2020-8908 temp-dir perms) -->
+        <dependency>
+            <groupId>com.google.guava</groupId>
+            <artifactId>guava</artifactId>
+            <version>24.1.1-jre</version>
+        </dependency>
+
+        <!-- DEMO-VULN: transitive-CVE volume #2 + insecure-deserialization gadget source —
+             commons-collections 3.2.1 (CVE-2015-6420 / famous InvokerTransformer gadget) -->
+        <dependency>
+            <groupId>commons-collections</groupId>
+            <artifactId>commons-collections</artifactId>
+            <version>3.2.1</version>
+        </dependency>
+
+        <!-- JWT (login / usr.id attribution) -->
+        <dependency>
+            <groupId>io.jsonwebtoken</groupId>
+            <artifactId>jjwt-api</artifactId>
+            <version>0.11.5</version>
+        </dependency>
+        <dependency>
+            <groupId>io.jsonwebtoken</groupId>
+            <artifactId>jjwt-impl</artifactId>
+            <version>0.11.5</version>
+            <scope>runtime</scope>
+        </dependency>
+        <dependency>
+            <groupId>io.jsonwebtoken</groupId>
+            <artifactId>jjwt-jackson</artifactId>
+            <version>0.11.5</version>
+            <scope>runtime</scope>
+        </dependency>
+
+        <!-- Datadog trace API — provides datadog.trace.api.interceptor.MutableSpan,
+             used to attach usr.id / usr.email to the local root span so security
+             signals and traces carry the authenticated user identity.
+             The dd-java-agent supplies the runtime implementation. -->
+        <dependency>
+            <groupId>com.datadoghq</groupId>
+            <artifactId>dd-trace-api</artifactId>
+            <version>1.30.1</version>
+        </dependency>
+        <!-- OpenTracing GlobalTracer — the dd-java-agent registers its tracer here
+             when OpenTracing is on the classpath. This is the pattern in Datadog's
+             "Add user info" Java docs (io.opentracing.util.GlobalTracer.get()). -->
+        <dependency>
+            <groupId>io.opentracing</groupId>
+            <artifactId>opentracing-util</artifactId>
+            <version>0.33.0</version>
+        </dependency>
+
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+
+    <build>
+        <finalName>workforce-vms</finalName>
+        <plugins>
+            <plugin>
+                <groupId>org.springframework.boot</groupId>
+                <artifactId>spring-boot-maven-plugin</artifactId>
+                <configuration>
+                    <excludes>
+                        <exclude>
+                            <groupId>org.projectlombok</groupId>
+                            <artifactId>lombok</artifactId>
+                        </exclude>
+                    </excludes>
+                </configuration>
+            </plugin>
+        </plugins>
+    </build>
+</project>

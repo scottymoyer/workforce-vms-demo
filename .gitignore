@@ -1,0 +1,18 @@
+# Secrets — NEVER commit
+.env
+
+# Build output
+target/
+*.class
+
+# SBOM output
+bom.json
+**/bom.json
+
+# dd-java-agent (downloaded at image build)
+dd-java-agent.jar
+
+# IDE / OS
+.idea/
+*.iml
+.DS_Store

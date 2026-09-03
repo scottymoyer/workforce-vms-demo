@@ -1,0 +1,34 @@
+spring:
+  application:
+    name: workforce-vms
+
+  datasource:
+    url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${DB_NAME:workforce}
+    username: ${DB_USER:workforce}
+    password: ${DB_PASSWORD:workforce}
+    driver-class-name: org.postgresql.Driver
+
+  jpa:
+    hibernate:
+      # schema.sql owns the DDL; JPA just maps onto it.
+      ddl-auto: none
+    open-in-view: false
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+
+  sql:
+    init:
+      # Always run schema.sql + data.sql (works against the external Postgres).
+      mode: always
+      schema-locations: classpath:schema.sql
+      data-locations: classpath:data.sql
+
+server:
+  port: 8080
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
