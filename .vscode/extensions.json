@@ -1,8 +1,11 @@
 {
-  // Recommends the Datadog IDE extension. On open, VS Code prompts to install it.
-  // The Datadog plugin reads code-security.datadog.yaml and surfaces SAST findings
-  // inline as you type (same java-security ruleset as CI), and shows SCA library
-  // vulnerabilities + runtime IAST findings pulled back from Datadog.
+  // Recommends the Datadog IDE extension (VS Code Marketplace + Open VSX, so Cursor
+  // gets it too). It reads code-security.datadog.yaml and surfaces platform-synced
+  // findings for the service.
+  // NOTE: as of extension v2.36.0, local in-editor static analysis does NOT support
+  // Java (its picker: Apex, C#, Go, JS, Kotlin, PHP, Python, Ruby, TS), so this Java
+  // repo gets NO inline SAST squiggles — Java SAST runs in CI + the Datadog platform.
+  // The analyzer engine supports Java; it's an extension enablement gap.
   "recommendations": [
     "Datadog.datadog-vscode"
   ]

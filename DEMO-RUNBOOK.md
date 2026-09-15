@@ -56,7 +56,7 @@ Give it ~2–3 min for data to surface in Datadog.
 | Scene | Datadog UI | What to show |
 |---|---|---|
 | 1. SCA + reachability | Security → Code Security → **Vulnerabilities** (SCA), filter `service:workforce-vms` | Full CVE list; sort by **reachable / code-executed** → prioritize |
-| 2. SAST + IDE/PR | Security → Code Security → **Static Analysis** (+ the Datadog IDE plugin inline) | First-party findings on the `// DEMO-VULN:` lines |
+| 2. SAST (first-party) | Security → Code Security → **Static Analysis** + **in-PR comments** (⚠️ not inline in VS Code/Cursor for Java — see "SAST in the IDE" below) | First-party findings on the `// DEMO-VULN:` lines |
 | 3. IAST runtime (SQLi) | Security → Code Security → **Vulnerabilities** (IAST) + **APM → Traces** | Tainted input → SQL sink with file:line; the trace shows the SQL **and** the input param + `usr.id` |
 | 4. App & API Protection | **App and API Protection → Signals** | Live attacks with source IP, endpoint, and `usr.id` (account attribution) |
 
@@ -88,26 +88,37 @@ docker compose down -v            # full clean incl. seeded DB
 colima stop                       # shut the VM when fully done
 ```
 
-## Finding SAST results in your IDE (VS Code / Cursor)
+## SAST in the IDE — important limitation for this Java app
 
-The Datadog extension runs the static analyzer locally using the rulesets in
-`code-security.datadog.yaml`, so first-party findings appear **as you edit**:
+**⚠️ The Datadog VS Code / Cursor extension (v2.36.0) does NOT analyze Java locally.**
+Its "Configure Static Analysis Languages" picker only offers **Apex, C#, Go, JavaScript,
+Kotlin, PHP, Python, Ruby, TypeScript** — Java is absent. So for this Java repo you get
+**no inline squiggles and no Problems-panel SAST entries**, no matter what
+`code-security.datadog.yaml` says. This is a VS Code-extension enablement gap, not a
+config error and not an engine limit (the `datadog-static-analyzer` engine fully supports
+Java — it's just not exposed in the extension's language picker).
 
-1. **Datadog panel** — the Datadog icon in the left **Activity Bar** opens a
-   *Code Security / Vulnerabilities* view listing findings for the workspace.
-2. **Inline squiggles** — the offending line (each `// DEMO-VULN:` line) gets a colored
-   underline; hovering shows the rule (e.g. `java-security/sql-injection`), severity, and
-   a quick-fix / "learn more" link.
-3. **Problems panel** — `View → Problems` (⇧⌘M) lists every finding with file:line;
-   clicking jumps to the code.
+*How we found this:* the extension IS installed and working (v2.36.0, from Open VSX — the
+Cursor default), and the config is valid; the language picker itself excludes Java.
 
-**Cursor note:** Cursor is a VS Code fork but defaults to the **Open VSX** marketplace,
-where the Datadog extension may not be published. If it doesn't show in the Extensions
-search, install the VSIX manually: download `datadog-vscode` from the VS Code Marketplace
-(or Datadog's releases), then in Cursor run **Extensions: Install from VSIX…** from the
-command palette (⇧⌘P). After installing, sign in to Datadog from the extension so it can
-pull SCA/IAST findings back from the platform. Local SAST (the inline squiggles) works
-from the bundled analyzer + `code-security.datadog.yaml` without a sign-in.
+**So drive the SAST scene from CI + the platform, not the editor:**
+- **CI** — the `datadog-static-analyzer` GitHub Action (`ci.yml`) runs the `java-security`
+  ruleset on every push/PR; findings post as **in-PR comments** (Source Code Integration).
+- **Datadog platform** — **Security → Code Security → Static Analysis**, filtered to the
+  repo/service, shows the same first-party findings on the exact `// DEMO-VULN:` lines.
+
+This is still a clean shift-left story (findings block the PR via the Quality Gate); it
+just isn't an inline-in-Cursor moment.
+
+**If you want an inline-in-IDE moment with Java:** the Datadog **JetBrains/IntelliJ**
+plugin uses the same engine and is the natural IDE for Java devs (more representative of a
+real workflow than a CLI). Before relying on it for the demo, confirm **Java appears in
+its** *Configure Static Analysis Languages* **picker** — the engine supports Java, but IDE
+enablement is the open question there too.
+
+**What the VS Code/Cursor plugin still gives you for this repo:** it's installed and can
+surface **platform-synced findings** (SCA library vulns, runtime IAST) for the service
+once you sign in — just not local real-time Java SAST.
 
 ## Quick reference
 

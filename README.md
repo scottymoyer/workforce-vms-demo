@@ -7,8 +7,16 @@ telemetry across the whole SDLC:
 
 ```
  IDE  ───────────►  CI  ───────────►  CD  ───────────►  Runtime
- SAST inline       SAST + SCA        Quality Gate      IAST + runtime SCA + AAP
- (Datadog plugin)  SBOM + git meta   → gated deploy    (dd-java-agent)
+ Datadog plugin    SAST + SCA        Quality Gate      IAST + runtime SCA + AAP
+ (see IDE note*)   SBOM + git meta   → gated deploy    (dd-java-agent)
+
+ * IDE note: the Datadog VS Code / Cursor extension (v2.36.0) does NOT expose Java for
+   local in-editor analysis (its picker covers Apex, C#, Go, JS, Kotlin, PHP, Python,
+   Ruby, TS — not Java). The static-analyzer engine itself supports Java; it's an
+   extension enablement gap. For THIS Java app, SAST findings surface in CI + the
+   Datadog platform UI, not as inline squiggles in VS Code/Cursor. The JetBrains/
+   IntelliJ plugin (same engine, natural Java IDE) may expose Java — verify its picker.
+   See §3 and §6.
 ```
 
 > ⚠️ **This app is intentionally insecure.** Every planted flaw is tagged `// DEMO-VULN:`
@@ -87,14 +95,14 @@ is not just present but *executed*.
 
 | # | Vuln | Type | Endpoint | Datadog surface | SDLC |
 |---|------|------|----------|-----------------|------|
-| 9 | **SQL injection (centerpiece)** | CWE-89 | `GET /api/workers/search?name=` · `GET /api/timesheets/search?status=` | SAST · **IAST** · APM trace | IDE · CI · Runtime |
-| 10 | Command injection | CWE-78 | `GET /api/admin/ping?host=` | SAST · IAST · AAP | IDE · CI · Runtime |
-| 11 | Path traversal | CWE-22 | `GET /api/documents/download?file=` | SAST · IAST · AAP | IDE · CI · Runtime |
-| 12 | Reflected XSS | CWE-79 | `GET /api/greeting?name=` | SAST · IAST · AAP | IDE · CI · Runtime |
-| 13 | SSRF | CWE-918 | `GET /api/vendors/logo?url=` | SAST · IAST · AAP | IDE · CI · Runtime |
-| 14 | Weak crypto (MD5) | CWE-327 | `POST /login` (via `PasswordHasher`) | SAST | IDE · CI |
-| 15 | Hardcoded secret | CWE-798 | `DemoSecrets` · `GET /api/vendors/{id}/billing-status` | SAST | IDE · CI |
-| 16 | Insecure deserialization | CWE-502 | `POST /api/admin/restore-config` | SAST · IAST | IDE · CI · Runtime |
+| 9 | **SQL injection (centerpiece)** | CWE-89 | `GET /api/workers/search?name=` · `GET /api/timesheets/search?status=` | SAST · **IAST** · APM trace | CI · Runtime |
+| 10 | Command injection | CWE-78 | `GET /api/admin/ping?host=` | SAST · IAST · AAP | CI · Runtime |
+| 11 | Path traversal | CWE-22 | `GET /api/documents/download?file=` | SAST · IAST · AAP | CI · Runtime |
+| 12 | Reflected XSS | CWE-79 | `GET /api/greeting?name=` | SAST · IAST · AAP | CI · Runtime |
+| 13 | SSRF | CWE-918 | `GET /api/vendors/logo?url=` | SAST · IAST · AAP | CI · Runtime |
+| 14 | Weak crypto (MD5) | CWE-327 | `POST /login` (via `PasswordHasher`) | SAST | CI |
+| 15 | Hardcoded secret | CWE-798 | `DemoSecrets` · `GET /api/vendors/{id}/billing-status` | SAST | CI |
+| 16 | Insecure deserialization | CWE-502 | `POST /api/admin/restore-config` | SAST · IAST | CI · Runtime |
 
 > The two "hard" remediation stories (non-upgrade mitigating control for Log4Shell, and
 > the SnakeYAML upgrade blast radius) live in **[MITIGATION.md](MITIGATION.md)**.
@@ -105,7 +113,7 @@ is not just present but *executed*.
 
 | Checkpoint | What's wired | Where |
 |------------|--------------|-------|
-| **IDE** | Datadog VS Code plugin recommended; reads `code-security.datadog.yaml` (java-security ruleset) → SAST findings inline as you type | [.vscode/extensions.json](.vscode/extensions.json) |
+| **IDE** | Datadog VS Code/Cursor plugin recommended. ⚠️ It does **not** analyze **Java** locally (v2.36.0 picker excludes Java), so no inline SAST squiggles for this app — the plugin still surfaces platform-synced findings. Java SAST is a CI + platform story here. | [.vscode/extensions.json](.vscode/extensions.json) |
 | **CI** | Datadog Static Analysis (SAST), SCA via CycloneDX SBOM upload, git-metadata upload, build+test, container image scan, **Quality Gate** | [.github/workflows/ci.yml](.github/workflows/ci.yml) |
 | **CD** | Deploy job gated on the CI Quality Gate (`workflow_run` + `conclusion == success`); ECR/Fargate slot documented | [.github/workflows/cd.yml](.github/workflows/cd.yml) |
 | **Runtime** | `dd-java-agent` with APM + IAST (`DD_IAST_ENABLED`) + runtime SCA (`DD_APPSEC_SCA_ENABLED`) + App & API Protection (`DD_APPSEC_ENABLED`) | [docker-compose.yml](docker-compose.yml) |
@@ -129,12 +137,20 @@ commons-collections). **Sort by "Code executed / reachable"** — the handful th
 `traffic.sh` actually exercised bubble to the top. *Story: volume vs. what's reachable;
 prioritize the reachable ones.*
 
-### Scene 2 — SAST on first-party code + PR/IDE remediation
-Open the repo in VS Code with the Datadog plugin → SQLi, command injection, weak MD5,
-hardcoded secret etc. flag **inline** on the exact `// DEMO-VULN:` lines. The same
-findings appear in CI (**Static Analysis** job) and as **in-PR comments** via Source
-Code Integration. *Story: shift-left; developer fixes before merge; the PR Gate can
-block.*
+### Scene 2 — SAST on first-party code + PR remediation
+Datadog Static Analysis flags the first-party flaws (SQLi, command injection, weak MD5,
+hardcoded secret, …) on the exact `// DEMO-VULN:` lines via the `java-security` ruleset.
+For **this Java app**, show these in **CI (the Static Analysis job) + as in-PR comments**
+(Source Code Integration), and in the platform at **Security → Code Security → Static
+Analysis**. *Story: shift-left; developer fixes before merge; the PR Gate can block.*
+
+> ⚠️ **Not inline in VS Code/Cursor for Java.** The Datadog VS Code/Cursor extension
+> (v2.36.0) doesn't expose Java for local analysis (its picker: Apex, C#, Go, JS, Kotlin,
+> PHP, Python, Ruby, TS). So there are **no inline squiggles** for this Java repo — drive
+> Scene 2 from the **PR + the Datadog UI**, not the editor. (The analyzer *engine*
+> supports Java; it's a VS Code-extension enablement gap. If you want an inline-in-IDE
+> moment, check whether the **JetBrains/IntelliJ** plugin — the natural Java IDE, same
+> engine — lists Java in its language picker.)
 
 ### Scene 3 — IAST runtime exploitability (SQLi + attribution)
 This is the centerpiece. `attack.sh` hits `GET /api/workers/search?name=' OR '1'='1`
@@ -174,7 +190,7 @@ Quality Gate catch it pre-merge, and a coding agent can scope the blast radius.
 | Product | UI location | Populated by |
 |---------|-------------|--------------|
 | SCA (libraries) | Security → Code Security → **Vulnerabilities** (SCA filter) | CI SBOM upload + runtime `DD_APPSEC_SCA_ENABLED` |
-| SAST (first-party) | Security → Code Security → **Vulnerabilities** (Static Analysis) | CI static-analysis job + IDE plugin |
+| SAST (first-party) | Security → Code Security → **Vulnerabilities** (Static Analysis) | CI static-analysis job (Java is **not** analyzed by the VS Code/Cursor plugin) |
 | IAST (runtime) | Security → Code Security → **Vulnerabilities** (Runtime/IAST) | `traffic.sh` + `attack.sh` under `DD_IAST_ENABLED` |
 | App & API Protection | **App and API Protection → Signals / Traces** | `attack.sh` under `DD_APPSEC_ENABLED` |
 | APM (SQL + input param) | **APM → Traces** (`service:workforce-vms`) | any traffic; db span shows the statement |
@@ -183,9 +199,15 @@ Quality Gate catch it pre-merge, and a coding agent can scope the blast radius.
 
 ## 6. IDE plugin + Datadog MCP server (optional)
 
-- **Datadog VS Code plugin** — install `Datadog.datadog-vscode` (VS Code will prompt from
-  `.vscode/extensions.json`). It reads `code-security.datadog.yaml` and shows SAST
-  findings inline, plus SCA/IAST findings pulled back from Datadog.
+- **Datadog VS Code / Cursor plugin** — install `Datadog.datadog-vscode` (the editor will
+  prompt from `.vscode/extensions.json`; it's on the VS Code Marketplace and Open VSX, so
+  Cursor gets it too). It reads `code-security.datadog.yaml` for the languages it supports.
+  ⚠️ **Java is not one of them** in v2.36.0 (picker: Apex, C#, Go, JS, Kotlin, PHP, Python,
+  Ruby, TS), so this Java repo gets **no inline SAST squiggles** — Java SAST is CI +
+  platform only. The plugin still surfaces platform-synced findings for the service. The
+  underlying analyzer engine *does* support Java; it's an extension enablement gap. For a
+  representative inline-IDE demo with Java, evaluate the **JetBrains/IntelliJ** plugin
+  (same engine) and confirm Java appears in its language picker.
 - **Datadog MCP server** — connect it to a coding agent (Claude / Copilot / Bits AI) so
   the agent can pull the live findings for this service, open the offending file/line,
   and propose fixes (including scoping the SnakeYAML blast radius in MITIGATION.md).

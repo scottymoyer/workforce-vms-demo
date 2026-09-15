@@ -2,8 +2,14 @@
 #
 # As of 2026 the canonical config file is `code-security.datadog.yaml`, with rulesets
 # nested under `sast:`. If both this file and the legacy `static-analysis.datadog.yml`
-# exist, THIS file wins. It drives both the CI static-analysis job and the Datadog IDE
-# plugin, so the same Java findings light up inline as you type and in the PR.
+# exist, THIS file wins. schema-version MUST be v1.0–v1.4 for this nested format (v1 is
+# only valid for the legacy flat `rulesets:` file).
+#
+# This drives the CI Static Analysis job (java-security etc.) and Java findings appear
+# in the PR + the Datadog platform. NOTE: the Datadog VS Code/Cursor extension (v2.36.0)
+# does NOT run local Java analysis, so these rules do NOT produce inline squiggles for
+# this Java repo — Java SAST here is a CI + platform story. (Engine supports Java; the
+# VS Code extension just doesn't expose it.)
 #
 # Docs: https://docs.datadoghq.com/security/code_security/static_analysis/configuration/
 
