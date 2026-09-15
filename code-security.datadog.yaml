@@ -7,7 +7,7 @@
 #
 # Docs: https://docs.datadoghq.com/security/code_security/static_analysis/configuration/
 
-schema-version: v1
+schema-version: v1.4
 sast:
   use-default-rulesets: false
   use-rulesets:
